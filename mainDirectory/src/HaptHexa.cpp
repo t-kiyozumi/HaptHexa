@@ -46,8 +46,10 @@ public:
   const double coxa_length = 4, femur_length = 10, tibia_length = 15;
   int32_t coxa_encoder_val, femur_encoder_val, tibia_encoder_val; //value that order to encoder between 0 - 4048
   double coxa_arg, femur_arg, tibia_arg;                          //argument of joint -π[rad]〜+π[rad]
+  double dx = 0.0, dy = 0.0, dz = 0.0;
   double x, y, z;
-  double x_home, y_home, z_home;
+  double dx_home = 0.0, dy_home = 0.0, dz_home = 0.0;
+  double x_home = 0.0, y_home = 0.0, z_home = 0.0;
 };
 
 void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_body_state, double count)
@@ -126,84 +128,68 @@ void calc_and_assign_homeposition_from_roll(leg_state leg[], hexapod_body_state 
 
 void controll_attitude_by_yaw_pich(leg_state leg[], hexapod_body_state *body_state, support_polygon *support_hexagon, double count)
 {
-  //ピッチ軸から前脚のホームポジションの決定
-  leg[front_right].x_home = (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal;
-  leg[front_right].y_home = 0.5 * (support_hexagon->side - body_state->side);
-  leg[front_right].z_home = -(body_state->cog_height - (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * sin(body_state->pitch));
+  //ピッチ角から前足のホームポジションの差分を計算
+  leg[front_right].dx_home = (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal - leg[front_right].x_home;
+  leg[front_right].dy_home = 0.5 * (support_hexagon->side - body_state->side) - leg[front_right].y_home;
+  leg[front_right].dz_home = -(body_state->cog_height - (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * sin(body_state->pitch)) - leg[front_right].z_home;
 
-  leg[front_left].x_home = leg[front_right].x_home;
-  leg[front_left].y_home = -leg[front_right].y_home;
-  leg[front_left].z_home = leg[front_right].z_home;
+  leg[front_left].dx_home = (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal - leg[front_left].x_home;
+  leg[front_left].dy_home = -0.5 * (support_hexagon->side - body_state->side) - leg[front_right].y_home - leg[front_left];
+  leg[front_left].dz_home = -(body_state->cog_height - (0.5 * support_hexagon->short_diagonal - body_state->ZMP_y) * sin(body_state->pitch)) - leg[front_left].z_home;
 
-  //ピッチ軸から中脚のホームポジションの決定
-  leg[middle_left].x_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal);
-  leg[middle_left].y_home = -body_state->ZMP_y * cos(body_state->pitch);
-  leg[middle_left].z_home = -(body_state->cog_height + sin(body_state->pitch));
+  //ピッチ軸から中脚のホームポジションの差分の計算
+  leg[middle_left].dx_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal) - leg[middle_left].x_home;
+  leg[middle_left].dy_home = -body_state->ZMP_y * cos(body_state->pitch) - leg[middle_left].y_home;
+  leg[middle_left].dz_home = -(body_state->cog_height + sin(body_state->pitch)) - leg[middle_left].z_home;
 
-  leg[middle_right].x_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal);
-  leg[middle_right].y_home = body_state->ZMP_y * cos(body_state->pitch);
-  leg[middle_right].z_home = -(body_state->cog_height + sin(body_state->pitch));
+  leg[middle_right].dx_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal) - leg[middle_right].x_home;
+  leg[middle_right].dy_home = body_state->ZMP_y * cos(body_state->pitch) - leg[middle_right].y_home;
+  leg[middle_right].dz_home = -(body_state->cog_height + sin(body_state->pitch)) - leg[middle_right].z_home;
 
-  //ピッチ軸から後脚のホームポジションの決定
-  leg[rear_right].x_home = (0.5 * support_hexagon->short_diagonal + body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal;
-  leg[rear_right].y_home = -leg[front_right].y_home;
-  leg[rear_right].z_home = -(body_state->cog_height + 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch));
+  //ピッチ軸から後脚のホームポジションの差分を計算
+  leg[rear_right].dx_home = (0.5 * support_hexagon->short_diagonal + body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal - leg[rear_right].x_home;
+  leg[rear_right].dy_home = -0.5 * (support_hexagon->side - body_state->side) - leg[rear_right].y_home;
+  leg[rear_right].dz_home = -(body_state->cog_height + 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[rear_right].z_home;
 
-  leg[rear_left].x_home = leg[rear_right].x_home;
-  leg[rear_left].y_home = leg[front_right].y_home;
-  leg[rear_left].z_home = leg[rear_right].z_home;
+  leg[rear_left].dx_home = (0.5 * support_hexagon->short_diagonal + body_state->ZMP_y) * cos(body_state->pitch) - 0.5 * body_state->short_diagonal - leg[rear_left].x_home;
+  leg[rear_left].dy_home = 0.5 * (support_hexagon->side - body_state->side) - leg[rear_left].y_home;
+  leg[rear_left].dz_home = -(body_state->cog_height + 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[rear_left].z_home;
 
-  // ///ロール軸から前脚のホームポジションの決定
-  // leg[front_right].x_home = (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[front_right].x_home;
-  // leg[front_right].y_home = 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[front_right].y_home;
-  // leg[front_right].z_home = -(body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) + leg[front_right].z_home;
+  ////////////////////////////////////////////////////ここからロール角に基づく制御
+  ///ロール軸から前脚のホームポジションの差分を計算
+  leg[front_right].dx_home = leg[front_right].dx_home + (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[front_right].x_home;
+  leg[front_right].dy_home = leg[front_right].dy_home + 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[front_right].y_home;
+  leg[front_right].dz_home = leg[front_right].dz_home + -(body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[front_right].z_home;
 
-  // leg[front_left].x_home = (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[front_left].x_home;
-  // leg[front_left].y_home = -0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[front_left].y_home;
-  // leg[front_left].z_home = -(body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) + leg[front_left].z_home;
+  leg[front_left].dx_home = leg[front_left].dx_home + (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[front_left].x_home;
+  leg[front_left].dy_home = leg[front_left].dy_home + -0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[front_left].y_home;
+  leg[front_left].dz_home = leg[front_left].dz_home + -(body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[front_left].z_home;
 
-  // //ロール軸から中脚のホームポジションの決定
-  // leg[middle_left].x_home = 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) + leg[middle_left].x_home;
-  // leg[middle_left].y_home = 0 + leg[middle_left].y_home;
-  // leg[middle_left].z_home = -(body_state->cog_height - 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) + leg[middle_left].z_home;
+  //ロール軸から中脚のホームポジションの差分を計算
+  leg[middle_left].dx_home = leg[middle_left].dx_home + 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) - leg[middle_left].x_home;
+  leg[middle_left].dy_home = leg[middle_left].dy_home + 0 - leg[middle_left].y_home;
+  leg[middle_left].dz_home = leg[middle_left].dz_home - (body_state->cog_height - 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) - leg[middle_left].z_home;
 
-  // leg[middle_right].x_home = 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) + leg[middle_right].x_home;
-  // leg[middle_right].y_home = 0 + leg[middle_right].y_home;
-  // leg[middle_right].z_home = -(body_state->cog_height + 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) + leg[middle_right].z_home;
+  leg[middle_right].dx_home = leg[middle_right].dx_home + 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) - leg[middle_right].x_home;
+  leg[middle_right].dy_home = leg[middle_right].dy_home + 0 - leg[middle_right].y_home;
+  leg[middle_right].dz_home = leg[middle_right].dz_home + -(body_state->cog_height + 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) - leg[middle_right].z_home;
 
-  // //ロール軸から後脚のホームポジションの決定
-  // leg[rear_right].x_home = (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[rear_right].x_home;
-  // leg[rear_right].y_home = -0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[rear_right].y_home;
-  // leg[rear_right].z_home = -(body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) + leg[rear_right].z_home;
+  //ロール軸から後脚のホームポジションの差分を計算
+  leg[rear_right].dx_home = leg[rear_right].dx_home + (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[rear_right].x_home;
+  leg[rear_right].dy_home = leg[rear_right].dy_home - 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[rear_right].y_home;
+  leg[rear_right].dz_home = leg[rear_right].dz_home - (body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[rear_right].z_home;
 
-  // leg[rear_left].x_home = (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[rear_left].x_home;
-  // leg[rear_left].y_home = 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + leg[rear_left].y_home;
-  // leg[rear_left].z_home = -(body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) + leg[rear_left].z_home;
+  leg[rear_left].dx_home = leg[rear_left].dx_home + (1.0 / tan((1.0 / 6.0) * M_PI)) * 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[rear_left].x_home;
+  leg[rear_left].dy_home = leg[rear_left].dy_home + 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - leg[rear_left].y_home;
+  leg[rear_left].dz_home = leg[rear_left].dz_home - (body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[rear_left].z_home;
 
-  // //ベクトル合成を行ったのでこれを半分にする
-  // leg[front_right].x_home = 0.5 * leg[front_right].x_home;
-  // leg[front_right].y_home = 0.5 * leg[front_right].y_home;
-  // leg[front_right].z_home = 0.5 * leg[front_right].z_home;
-
-  // leg[front_left].x_home = 0.5 * leg[front_left].x_home;
-  // leg[front_left].y_home = 0.5 * leg[front_left].y_home;
-  // leg[front_left].z_home = 0.5 * leg[front_left].z_home;
-
-  // leg[middle_left].x_home = 0.5 * leg[middle_left].x_home;
-  // leg[middle_left].y_home = 0.5 * leg[middle_left].y_home;
-  // leg[middle_left].z_home = 0.5 * leg[middle_left].z_home;
-
-  // leg[middle_right].x_home = 0.5 * leg[middle_right].x_home;
-  // leg[middle_right].y_home = 0.5 * leg[middle_right].y_home;
-  // leg[middle_right].z_home = 0.5 * leg[middle_right].z_home;
-
-  // leg[rear_right].x_home = 0.5 * leg[rear_right].x_home;
-  // leg[rear_right].y_home = 0.5 * leg[rear_right].y_home;
-  // leg[rear_right].z_home = 0.5 * leg[rear_right].z_home;
-
-  // leg[rear_left].x_home = 0.5 * leg[rear_left].x_home;
-  // leg[rear_left].y_home = 0.5 * leg[rear_left].y_home;
-  // leg[rear_left].z_home = 0.5 * leg[rear_left].z_home;
+  int j = front_left;
+  for (int i = 0; i <= j; i++)
+  {
+    leg[i].x_home = leg[i].x_home + leg[i].dx_home;
+    leg[i].y_home = leg[i].y_home + leg[i].dy_home;
+    leg[i].z_home = leg[i].z_home + leg[i].dz_home;
+  };
 }
 
 void pub_encoder_val_to_all_dyanmixel(leg_state leg[], const char *log)
@@ -378,7 +364,7 @@ int main(int argc, char *argv[])
     body_state->ZMP_y = 5 * sin(count * M_PI * 2 * 0.003);
     //body_state->pitch = -M_PI / 18.0;
     // body_state->roll = (1 / 18.0) * M_PI * sin(count * M_PI * 2 * 0.003);
-     body_state->pitch = (1.5 / 18.0) * M_PI * cos(count * M_PI * 2 * 0.003);
+    body_state->pitch = (1.5 / 18.0) * M_PI * cos(count * M_PI * 2 * 0.003);
     controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
     flat_terrain_walk_rajectory(leg, body_state, count);
     printf("leg[middle_right]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[middle_right].coxa_arg / M_PI, leg[middle_right].femur_arg / M_PI, leg[middle_right].tibia_arg / M_PI);
