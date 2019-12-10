@@ -1,0 +1,30 @@
+Partlist
+
+Exported from force_sensor_pcb_v2.sch at 2018/12/13 10:30
+
+EAGLE Version 9.2.2 Copyright (c) 1988-2018 Autodesk, Inc.
+
+Assembly variant: 
+
+Part     Value          Device         Package        Library                  Sheet
+
+C1                      C-EUC0603      C0603          rcl                      1
+C2                      C-EUC0603      C0603          rcl                      1
+C3                      C-EUC0603      C0603          rcl                      1
+C4                      C-EUC0603      C0603          rcl                      1
+CN1                     B5B-PH-K-S     B5B-PH-K-S     jst-ph                   1
+CN2      DF58-4P4P      DF58-4P4P      DF58-4P        yunit-tech_eagle_library 1
+CN3      DF58-4P4P      DF58-4P4P      DF58-4P        yunit-tech_eagle_library 1
+CN4      KYOCERA-62774P KYOCERA-62774P KYOCERA-6277-4 yunit-tech_eagle_library 1
+D1       BLUE           LED-BLUE0603   LED-0603       yunit-tech_eagle_library 1
+R1                      R-EU_R0603     R0603          rcl                      1
+R2                      R-EU_R0603     R0603          rcl                      1
+R3                      R-EU_R0603     R0603          rcl                      1
+R4       1.3k           R-EU_R0603     R0603          rcl                      1
+R5       10k            R-EU_R0603     R0603          rcl                      1
+R6       3k             R-EU_R0603     R0603          rcl                      1
+U1       AD623RM-8      AD623RM-8      MSOP08         yunit-tech_eagle_library 1
+U2       AD623RM-8      AD623RM-8      MSOP08         yunit-tech_eagle_library 1
+U3       AD623RM-8      AD623RM-8      MSOP08         yunit-tech_eagle_library 1
+VR1      D43A           D43A           D43A           yunit-tech_eagle_library 1
+VR2      D43A           D43A           D43A           yunit-tech_eagle_library 1
