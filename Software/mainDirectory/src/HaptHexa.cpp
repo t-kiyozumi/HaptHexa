@@ -1,5 +1,6 @@
 #include <DynamixelWorkbench.h>
 #include <stdio.h>
+#include <string.h>
 #include <math.h>
 #include <time.h>
 #include <unistd.h>
@@ -12,6 +13,9 @@ DynamixelWorkbench dxl_wb;
 #include <stdlib.h>
 #include <linux/joystick.h>
 #include <string>
+#include <errno.h>   // Error integer and strerror() function
+#include <termios.h> // Contains POSIX terminal control definitions
+#include <unistd.h>  // write(), read(), close()
 
 enum leg_num
 {
@@ -31,6 +35,12 @@ public:
   double side = 22;
 };
 
+enum mode
+{
+  autoMode,
+  manualMode,
+};
+
 class hexapod_body_state
 {
 public:
@@ -38,6 +48,8 @@ public:
   double yaw = 0.0, pitch = 0.0, roll = 0.0;
   double cog_height = 12.5;
   double ZMP_x = 0.0, ZMP_y;
+  int mode = manualMode;
+  int mode_is_alrdy_changed;
 };
 
 class jy901_state
@@ -76,6 +88,7 @@ typedef struct
   uint16_t LB;
   uint16_t RB;
   uint16_t start;
+  uint16_t back;
   int16_t axes1_x;
   int16_t axes1_y;
   int16_t axes0_x;
@@ -106,6 +119,11 @@ void write_controler_state(controler_state *controler, js_event event)
     if (event.number == 3)
     {
       controler->Y = event.value;
+    }
+    if (event.number == 8)
+    {
+      controler->back = event.value;
+      // printf("bock %d", controler->back);
     }
 
     break;
@@ -221,9 +239,12 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
 
 void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state *controler, hexapod_body_state *body_state)
 {
+  //コントローラクラスの値をロボットに適用
   double x0, x1;
   double y0, y1;
   int j = front_left;
+  //x0,y0は左のジョイスティック（進行方向用）
+  //x1,y1は右のジョイスティック(姿勢制御用)
   x0 = (double)controler->axes0_x;
   y0 = (double)controler->axes0_y;
 
@@ -233,7 +254,7 @@ void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state
   for (int i = 0; i <= j; i++)
   {
     tmp_leg[i].trajectory_yaw = -(atan2(y0, x0) - (M_PI / 2));
-    printf("trj yaw from joy %f \n", tmp_leg[i].trajectory_yaw);
+    //printf("trj yaw from joy %f \n", tmp_leg[i].trajectory_yaw);
   }
   for (int i = 0; i <= j; i++)
   {
@@ -241,7 +262,44 @@ void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state
   }
   body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
   body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
-  printf("x:%f y:%f \n", x1, y1);
+  // printf("x:%f y:%f \n", x1, y1);
+}
+
+void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *controler, jy901_state *jy901, hexapod_body_state *body_state)
+{
+  //コントローラクラスの値をロボットに適用
+  double x0, x1;
+  double y0, y1;
+  int j = front_left;
+  double delta_roll;
+  double delta_pitch;
+  //x0,y0は左のジョイスティック（進行方向用）
+  //x1,y1は右のジョイスティック(姿勢制御用)
+  x0 = (double)controler->axes0_x;
+  y0 = (double)controler->axes0_y;
+
+  x1 = (double)controler->axes1_x;
+  y1 = (double)controler->axes1_y;
+
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].trajectory_yaw = -(atan2(y0, x0) - (M_PI / 2));
+    //printf("trj yaw from joy %f \n", tmp_leg[i].trajectory_yaw);
+  }
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].trajectory_velocity = (sqrt(pow(abs(x0), 2.0) + pow(abs(y0), 2.0))) / 36000;
+  }
+
+  delta_roll = (0 - jy901->roll) * 0.025;
+  body_state->roll = body_state->roll + delta_roll;
+
+  delta_pitch = (0 + jy901->pich) * 0.025;
+  body_state->pitch = body_state->pitch + delta_pitch;
+
+  // body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
+  // body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
+  // printf("x:%f y:%f \n", x1, y1);
 }
 
 void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_body_state, double count)
@@ -259,8 +317,9 @@ void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_bod
     tmp_leg[i].z = tmp_leg[i].z_home;
     if (i == middle_right)
     {
+      //軌道の進行方向(trajectory_yaw)とボディーのピッチ角とロール角から，軌道をどれだけ傾けるか（trajectroy_pich）を計算している。
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
-      printf("trajectory pich :%f trajecotyr yaw :%f \n ", tmp_leg[i].trajectory_pitch, tmp_leg[i].trajectory_yaw);
+      // printf("trajectory pich :%f trajecotyr yaw :%f \n ", tmp_leg[i].trajectory_pitch, tmp_leg[i].trajectory_yaw);
 
       tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
       tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
@@ -275,8 +334,6 @@ void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_bod
 
     if (i == middle_left)
     {
-      printf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
-
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
       tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
@@ -478,8 +535,8 @@ void controll_attitude_by_yaw_pich(leg_state leg[], hexapod_body_state *body_sta
   leg[rear_left].dy_home = leg[rear_left].dy_home + 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + body_state->ZMP_x - leg[rear_left].y_base;
   leg[rear_left].dz_home = leg[rear_left].dz_home - (body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[rear_left].z_base;
 
-  printf("leg[front_right]: dx = %f , dy = %f,dz = %f\n", leg[front_right].dx_home, leg[front_right].dy_home, leg[front_right].dz_home);
-  printf("leg[rear_left]: dx = %f , dy = %f,dz = %f\n", leg[rear_left].dx_home, leg[rear_left].dy_home, leg[rear_left].dz_home);
+  // printf("leg[front_right]: dx = %f , dy = %f,dz = %f\n", leg[front_right].dx_home, leg[front_right].dy_home, leg[front_right].dz_home);
+  // printf("leg[rear_left]: dx = %f , dy = %f,dz = %f\n", leg[rear_left].dx_home, leg[rear_left].dy_home, leg[rear_left].dz_home);
   int j = front_left;
   for (int i = 0; i <= j; i++)
   {
@@ -548,41 +605,62 @@ void pub_encoder_val_to_all_dyanmixel(leg_state leg[], const char *log)
   dxl_wb.bulkWrite(&log);
 }
 
-// int set_pich_roll_from_jy901(int num_bytes, int serial_port, unsigned char read_buf[], )
-// {
-//   num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
-//   if (num_bytes < 0)
-//   {
-//     printf("Error reading: %s \n", strerror(errno));
-//   }
-//   // printf("%x ", read_buf[0]);
-//   if (read_buf[0] == 0x55)
-//   {
-//     printf("\n");
-//     i = 0;
-//     jy_buf[i] = read_buf[0];
-//   }
-//   jy_buf[i] = read_buf[0];
+void read_jy(int fd, jy901_state *jy901)
+{
+  //printf("///////////////////////////////////////////////starting_reading_jy//////////////////////////\n");
+  unsigned char read_buf[1];
+  unsigned char jy_buf[11];
+  int i = 0;
+  int j = 0;
 
-//   if (i == 10)
-//   {
-//     // printf("|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|\n", jy_buf[0], jy_buf[1], jy_buf[2], jy_buf[3], jy_buf[4], jy_buf[5], jy_buf[6], jy_buf[7], jy_buf[8], jy_buf[9], jy_buf[10]);
-//     // if (jy_buf[1] == 0x51)
-//     // {
-//     //   printf("Acceleration Z : %f \n", ((jy_buf[7] << 8) | jy_buf[6]) / 32768.0 * (16.0 * 9.8));
-//     // }
-//     if (jy_buf[1] == 0x53)
-//     {
-//       printf("pich : %f \n", ((read_buf[6] << 8) | read_buf[4]) / 182.54);
-//       printf("Roll : %f \n", ((read_buf[4] << 8) | read_buf[3]) / 182.54);
-//     }
-//   }
-// }
+  memset(&read_buf, '\0', sizeof(read_buf));
+  memset(&jy_buf, '\0', sizeof(jy_buf));
+  int num_bytes;
+
+  while (1)
+  {
+    //printf("staring_jy_reading_loop %d \n", i);
+    num_bytes = read(fd, &read_buf, sizeof(read_buf));
+    if (num_bytes < 0)
+    {
+      printf("Error reading: %s \n", strerror(errno));
+    }
+    //printf("%x \n", read_buf[0]);
+    if (read_buf[0] == 0x55)
+    {
+      printf("\n");
+      i = 0;
+      jy_buf[i] = read_buf[0];
+    }
+
+    jy_buf[i] = read_buf[0];
+
+    if (i == 10)
+    {
+      // printf("|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|\n", jy_buf[0], jy_buf[1], jy_buf[2], jy_buf[3], jy_buf[4], jy_buf[5], jy_buf[6], jy_buf[7], jy_buf[8], jy_buf[9], jy_buf[10]);
+      if (jy_buf[1] == 0x53)
+      {
+        jy901->pich = (((read_buf[6] << 8) | read_buf[4]) / 182.54);
+        jy901->roll = (((read_buf[4] << 8) | read_buf[3]) / 182.54);
+        if (180 <= jy901->pich && jy901->pich <= 360)
+        {
+          jy901->pich = jy901->pich - 360;
+        }
+        if (180 <= jy901->roll && jy901->roll <= 360)
+        {
+          jy901->roll = jy901->roll - 360;
+        }
+        jy901->pich = jy901->pich * (M_PI / 180);
+        jy901->roll = jy901->roll * (M_PI / 180);
+      }
+      break;
+    }
+    i++;
+  }
+}
 
 int main(int argc, char *argv[])
 {
-  ///////////////////////jy901関連////////////////////////////
-
   ///////////////////////コントローラ関係/////////////////////
   int fd = open("/dev/input/js0", O_NONBLOCK); //初期化
   struct js_event event;
@@ -682,48 +760,111 @@ int main(int argc, char *argv[])
   {
     printf("%s\n", log);
   }
-
+  ///////////////////ロボットの要素//////////////////////////
   double count = 0.0;
-  int i = 0;
   controler_state *controler;
   controler = (controler_state *)malloc(sizeof(controler_state));
   hexapod_body_state body_state[1];
   support_polygon support_hexagon[1];
   leg_state leg[6];
-  printf("sup_hex_long_diag %f\n", support_hexagon->long_diagonal);
+  jy901_state jy901[1];
+
+  //////////////////jy901関係の初期設定//////////////////////
+  int serial_port = open("/dev/ttyUSB1", O_RDWR);
+  // Create new termios struc, we call it 'tty' for convention
+  struct termios tty;
+  memset(&tty, 0, sizeof tty);
+
+  // Read in existing settings, and handle any error
+  if (tcgetattr(serial_port, &tty) != 0)
+  {
+    printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
+  }
+
+  tty.c_cflag &= ~PARENB;        // Clear parity bit, disabling parity (most common)
+  tty.c_cflag &= ~CSTOPB;        // Clear stop field, only one stop bit used in communication (most common)
+  tty.c_cflag |= CS8;            // 8 bits per byte (most common)
+  tty.c_cflag &= ~CRTSCTS;       // Disable RTS/CTS hardware flow control (most common)
+  tty.c_cflag |= CREAD | CLOCAL; // Turn on READ & ignore ctrl lines (CLOCAL = 1)
+
+  tty.c_lflag &= ~ICANON;
+  tty.c_lflag &= ~ECHO;                                                        // Disable echo
+  tty.c_lflag &= ~ECHOE;                                                       // Disable erasure
+  tty.c_lflag &= ~ECHONL;                                                      // Disable new-line echo
+  tty.c_lflag &= ~ISIG;                                                        // Disable interpretation of INTR, QUIT and SUSP
+  tty.c_iflag &= ~(IXON | IXOFF | IXANY);                                      // Turn off s/w flow ctrl
+  tty.c_iflag &= ~(IGNBRK | BRKINT | PARMRK | ISTRIP | INLCR | IGNCR | ICRNL); // Disable any special handling of received bytes
+
+  tty.c_oflag &= ~OPOST; // Prevent special interpretation of output bytes (e.g. newline chars)
+  tty.c_oflag &= ~ONLCR; // Prevent conversion of newline to carriage return/line feed
+  // tty.c_oflag &= ~OXTABS; // Prevent conversion of tabs to spaces (NOT PRESENT ON LINUX)
+  // tty.c_oflag &= ~ONOEOT; // Prevent removal of C-d chars (0x004) in output (NOT PRESENT ON LINUX)
+
+  tty.c_cc[VTIME] = 10; // Wait for up to 1s (10 deciseconds), returning as soon as any data is received.
+  tty.c_cc[VMIN] = 0;
+
+  // Set in/out baud rate to be 115200
+  cfsetispeed(&tty, B115200);
+  cfsetospeed(&tty, B115200);
+
+  if (tcsetattr(serial_port, TCSANOW, &tty) != 0)
+  {
+    printf("Error %i from tcsetattr: %s\n", errno, strerror(errno));
+  }
 
   while (controler->start == 0)
   {
-    //コントローラからの値の読み込みと代入
+
+    //コントローラからの値の読み込み
     read(fd, &event, sizeof(event));
     write_controler_state(controler, event);
-    set_val_from_controller(leg, event, controler, body_state);
+    if (controler->back == 1 && body_state->mode == autoMode && body_state->mode_is_alrdy_changed == 0)
+    {
+      body_state->mode = manualMode;
+      body_state->mode_is_alrdy_changed = 1;
+    }
+
+    if (controler->back == 1 && body_state->mode == manualMode && body_state->mode_is_alrdy_changed == 0)
+    {
+      body_state->mode = autoMode;
+      body_state->mode_is_alrdy_changed = 1;
+    }
+
+    if (controler->back == 0)
+    {
+      body_state->mode_is_alrdy_changed = 0;
+    }
+
+    //jy901からの値の読み込み
+    read_jy(serial_port, jy901);
+
+    if (body_state->mode == manualMode)
+    {
+      //ボディーにコントローラからの情報を書き込む，（ヨー，ピッチなど）
+      set_val_from_controller(leg, event, controler, body_state);
+    }
+    if (body_state->mode == autoMode)
+    {
+      set_val_from_jy901_and_controller(leg, controler, jy901, body_state);
+    }
+
     controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
     flat_terrain_walk_rajectory(leg, body_state, count);
     rotate_trajectory_depending_joy(leg, body_state, support_hexagon, controler, count);
 
+    printf("/////////////hex Infoation//////////////////\n");
+    printf("pich by Jy901: %f π\n", jy901->pich / M_PI);
+    printf("Roll by jy901: %f π\n", jy901->roll / M_PI);
+    printf("pich order:%f π\n", body_state->pitch / M_PI);
+    printf("roll order:%f π\n", body_state->roll / M_PI);
     printf("button %u pressed, vale %d  \n", event.number, event.value);
-    printf("roll %f π\n", body_state->roll / M_PI);
-
-    //printf("leg[middle_right]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[middle_right].coxa_arg / M_PI, leg[middle_right].femur_arg / M_PI, leg[middle_right].tibia_arg / M_PI);
-    printf("leg[middle_right]_cordinate: x = %f , y = %f,z = %f\n", leg[middle_right].x, leg[middle_right].y, leg[middle_right].z);
-    printf("leg[middle_left]_cordinate: x = %f , y = %f,z = %f\n", leg[middle_left].x, leg[middle_left].y, leg[middle_left].z);
-
-    // printf("leg[front_right]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[front_right].coxa_arg / M_PI, leg[front_right].femur_arg / M_PI, leg[front_right].tibia_arg / M_PI);
-    //printf("leg[front_right]_cordinate: x = %f , y = %f,z = %f\n", leg[front_right].x, leg[front_right].y, leg[front_right].z);
-    printf("leg[front_right]_cordinate: x = %f , y = %f,z = %f\n", leg[front_right].x, leg[front_right].y, leg[front_right].z);
-    //printf("leg[front_right]: dx = %f , dy = %f,dz = %f\n", leg[front_right].dx, leg[front_right].dy, leg[front_right].dz);
-
-    // printf("leg[front_left]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[front_left].coxa_arg / M_PI, leg[front_left].femur_arg / M_PI, leg[front_left].tibia_arg / M_PI);
-    printf("leg[front_left]_cordinate: x = %f , y = %f,z = %f\n", leg[front_left].x, leg[front_left].y, leg[front_left].z);
-
-    printf("leg[rear_right]_cordinate: x = %f , y = %f,z = %f\n", leg[rear_right].x, leg[rear_right].y, leg[rear_right].z);
-    printf("leg[rear_left]_cordinate: x = %f , y = %f,z = %f\n", leg[rear_left].x, leg[rear_left].y, leg[rear_left].z);
+    printf("back %d, mode:%d \n", controler->back, body_state->mode);
 
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
     count++;
     usleep(5000);
   }
+  close(serial_port);
   return 0;
 }
