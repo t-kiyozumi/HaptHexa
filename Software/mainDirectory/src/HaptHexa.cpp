@@ -1,0 +1,729 @@
+#include <DynamixelWorkbench.h>
+#include <stdio.h>
+#include <math.h>
+#include <time.h>
+#include <unistd.h>
+#include <ncurses.h>
+
+DynamixelWorkbench dxl_wb;
+
+#include <fcntl.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <linux/joystick.h>
+#include <string>
+
+enum leg_num
+{
+  front_right,
+  middle_right,
+  rear_right,
+  rear_left,
+  middle_left,
+  front_left,
+};
+
+class support_polygon
+{
+public:
+  double long_diagonal = 44;
+  double short_diagonal = 22 * sqrt(3.0);
+  double side = 22;
+};
+
+class hexapod_body_state
+{
+public:
+  const double side = 8.0, long_diagonal = 16.0, short_diagonal = 8 * sqrt(3.0);
+  double yaw = 0.0, pitch = 0.0, roll = 0.0;
+  double cog_height = 12.5;
+  double ZMP_x = 0.0, ZMP_y;
+};
+
+class jy901_state
+{
+public:
+  double yaw;
+  double roll;
+  double pich;
+  double accX;
+  double accY;
+  double accZ;
+};
+
+class leg_state
+{
+public:
+  const double coxa_length = 4, femur_length = 10, tibia_length = 12.5;
+  int32_t coxa_encoder_val, femur_encoder_val, tibia_encoder_val; //value that order to encoder between 0 - 4048
+  double coxa_arg, femur_arg, tibia_arg;                          //argument of joint -π[rad]〜+π[rad]
+  double dx = 0.0, dy = 0.0, dz = 0.0;
+  double x, y, z;
+  double dx_home = 0.0, dy_home = 0.0, dz_home = 0.0;
+  double x_home = 0.0, y_home = 0.0, z_home = 0.0;
+  double x_base, y_base, z_base;
+  double trajectory_hight = 3.0, trajectory_width = 5.0;
+  double trajectory_yaw = 0.0, trajectory_pitch = 0.0;
+  double trajectory_velocity;
+};
+
+typedef struct
+{
+  uint16_t X;
+  uint16_t Y;
+  uint16_t A;
+  uint16_t B;
+  uint16_t LB;
+  uint16_t RB;
+  uint16_t start;
+  int16_t axes1_x;
+  int16_t axes1_y;
+  int16_t axes0_x;
+  int16_t axes0_y;
+} controler_state;
+
+void write_controler_state(controler_state *controler, js_event event)
+{
+  switch (event.type)
+  {
+  case JS_EVENT_BUTTON:
+    if (event.number == 4)
+    {
+      controler->LB = event.value;
+    }
+    if (event.number == 5)
+    {
+      controler->RB = event.value;
+    }
+    if (event.number == 9)
+    {
+      controler->start = event.value;
+    }
+    if (event.number == 0)
+    {
+      controler->X = event.value;
+    }
+    if (event.number == 3)
+    {
+      controler->Y = event.value;
+    }
+
+    break;
+  case JS_EVENT_AXIS:
+    if (event.number == 0)
+    {
+      controler->axes0_x = event.value;
+    }
+    if (event.number == 1)
+    {
+      controler->axes0_y = -event.value;
+    }
+    if (event.number == 2)
+    {
+      controler->axes1_x = event.value;
+    }
+    if (event.number == 3)
+    {
+      controler->axes1_y = -event.value;
+    }
+    break;
+  default:
+    /* Ignore init events. */
+    break;
+  }
+}
+
+void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp_body_state, support_polygon *support_hexagon, controler_state *controler, double count)
+{ //this is open loop controll as test
+
+  int j = front_left;
+  double delta_yaw;
+  if (controler->LB || controler->RB)
+  {
+    if (controler->RB)
+    {
+      delta_yaw = (M_PI / 18.0) * sin(count * M_PI * 2 * 0.003012);
+    }
+    if (controler->LB)
+    {
+      delta_yaw = -(M_PI / 18.0) * sin(count * M_PI * 2 * 0.003012);
+    }
+
+    // int k = middle_right;
+    for (int i = 0; i <= j; i++)
+    {
+
+      if (i == front_left)
+      {
+        tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
+        tmp_leg[i].y = -(0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->side);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+      if (i == middle_right)
+      {
+        tmp_leg[i].x = 0.5 * support_hexagon->long_diagonal * cos(delta_yaw) - 0.5 * tmp_body_state->long_diagonal;
+        tmp_leg[i].y = 0.5 * support_hexagon->long_diagonal * sin(delta_yaw);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+      if (i == rear_left)
+      {
+        tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
+        tmp_leg[i].y = (0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->side);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+
+      //////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+      if (i == rear_right)
+      {
+        tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
+        tmp_leg[i].y = -(0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->side);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+      if (i == middle_left)
+      {
+        tmp_leg[i].x = 0.5 * support_hexagon->long_diagonal * cos(-delta_yaw) - 0.5 * tmp_body_state->long_diagonal;
+        tmp_leg[i].y = 0.5 * support_hexagon->long_diagonal * sin(-delta_yaw);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+      if (i == front_right)
+      {
+        tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
+        tmp_leg[i].y = (0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->side);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        if (tmp_leg[i].z <= tmp_leg[i].z_home)
+        {
+          tmp_leg[i].z = tmp_leg[i].z_home;
+        }
+      }
+    }
+  }
+}
+
+void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state *controler, hexapod_body_state *body_state)
+{
+  double x0, x1;
+  double y0, y1;
+  int j = front_left;
+  x0 = (double)controler->axes0_x;
+  y0 = (double)controler->axes0_y;
+
+  x1 = (double)controler->axes1_x;
+  y1 = (double)controler->axes1_y;
+
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].trajectory_yaw = -(atan2(y0, x0) - (M_PI / 2));
+    printf("trj yaw from joy %f \n", tmp_leg[i].trajectory_yaw);
+  }
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].trajectory_velocity = (sqrt(pow(abs(x0), 2.0) + pow(abs(y0), 2.0))) / 36000;
+  }
+  body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
+  body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
+  printf("x:%f y:%f \n", x1, y1);
+}
+
+void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_body_state, double count)
+{
+  int j = front_left;
+  double position_arg;
+  double norm;
+  double yaw_x, yaw_y, yaw_z;
+
+  // int k = middle_right;
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].x = tmp_leg[i].x_home;
+    tmp_leg[i].y = tmp_leg[i].y_home;
+    tmp_leg[i].z = tmp_leg[i].z_home;
+    if (i == middle_right)
+    {
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+      printf("trajectory pich :%f trajecotyr yaw :%f \n ", tmp_leg[i].trajectory_pitch, tmp_leg[i].trajectory_yaw);
+
+      tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      {
+        tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+      }
+    }
+
+    if (i == middle_left)
+    {
+      printf("aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
+
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      {
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+      }
+    }
+    if (i == front_right)
+    {
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      {
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+      }
+    }
+    if (i == front_left)
+    {
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
+      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      {
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
+        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+      }
+    }
+    if (i == rear_left)
+    {
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      {
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+      }
+    }
+    if (i == rear_right)
+    {
+      tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
+
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      {
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+      }
+    }
+  }
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].y = tmp_leg[i].trajectory_velocity * tmp_leg[i].y;
+    tmp_leg[i].x = tmp_leg[i].trajectory_velocity * tmp_leg[i].trajectory_velocity * tmp_leg[i].x;
+    tmp_leg[i].z = tmp_leg[i].trajectory_velocity * tmp_leg[i].z;
+  }
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].y = tmp_leg[i].trajectory_velocity * tmp_leg[i].y + tmp_leg[i].y_home;
+    tmp_leg[i].x = tmp_leg[i].trajectory_velocity * tmp_leg[i].trajectory_velocity * tmp_leg[i].x + tmp_leg[i].x_home;
+    tmp_leg[i].z = tmp_leg[i].trajectory_velocity * tmp_leg[i].z + tmp_leg[i].z_home;
+  }
+}
+
+class controller_state
+{
+public:
+  uint16_t X;
+  uint16_t Y;
+  uint16_t A;
+  uint16_t B;
+  uint16_t LB;
+  uint16_t RB;
+  uint16_t start;
+  int16_t axes1_x;
+  int16_t axes1_y;
+  int16_t axes0_x;
+  int16_t axes0_y;
+};
+
+void set_initialvalue_to_leg(leg_state leg[], hexapod_body_state *body_state, support_polygon *support_hexagon)
+{
+  leg[front_right].x_base = 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal);
+  leg[front_right].y_base = 0.5 * (support_hexagon->side - body_state->side);
+  leg[front_right].z_base = -body_state->cog_height;
+
+  leg[front_left].x_base = 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal);
+  leg[front_left].y_base = -0.5 * (support_hexagon->side - body_state->side);
+  leg[front_left].z_base = -body_state->cog_height;
+
+  leg[middle_left].x_base = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal);
+  leg[middle_left].y_base = 0;
+  leg[middle_left].z_base = -body_state->cog_height;
+
+  leg[middle_right].x_base = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal);
+  leg[middle_right].y_base = 0;
+  leg[middle_right].z_base = -body_state->cog_height;
+
+  leg[rear_right].x_base = 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal);
+  leg[rear_right].y_base = -0.5 * (support_hexagon->side - body_state->side);
+  leg[rear_right].z_base = -body_state->cog_height;
+
+  leg[rear_left].x_base = 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal);
+  leg[rear_left].y_base = 0.5 * (support_hexagon->side - body_state->side);
+  leg[rear_left].z_base = -body_state->cog_height;
+}
+
+void set_joint_arg_by_inv_dynamics(leg_state tmp_leg[])
+{
+  double tmp_x, tmp_y, tmp_z;
+  int j = front_left;
+  for (int i = 0; i <= j; i++)
+  {
+    tmp_leg[i].coxa_arg = atan2(tmp_leg[i].y, tmp_leg[i].x);
+
+    tmp_x = tmp_leg[i].x * cos(tmp_leg[i].coxa_arg) + tmp_leg[i].y * sin(tmp_leg[i].coxa_arg) - tmp_leg[i].coxa_length;
+    tmp_y = -tmp_leg[i].x * sin(tmp_leg[i].coxa_arg) + tmp_leg[i].y * cos(tmp_leg[i].coxa_arg);
+    tmp_z = tmp_leg[i].z;
+
+    tmp_leg[i].tibia_arg = -(M_PI - acos((pow(tmp_leg[i].femur_length, 2) + pow(tmp_leg[i].tibia_length, 2) - pow(tmp_x, 2) - pow(tmp_z, 2)) / (2 * tmp_leg[i].femur_length * tmp_leg[i].tibia_length)));
+    tmp_leg[i].femur_arg = atan2(tmp_z, tmp_x) + acos((pow(tmp_leg[i].femur_length, 2) - pow(tmp_leg[i].tibia_length, 2) + pow(tmp_x, 2) + pow(tmp_z, 2)) / (2 * tmp_leg[i].femur_length * sqrt(pow(tmp_x, 2) + pow(tmp_z, 2))));
+  }
+}
+
+void controll_attitude_by_yaw_pich(leg_state leg[], hexapod_body_state *body_state, support_polygon *support_hexagon, double count)
+{
+  set_initialvalue_to_leg(leg, body_state, support_hexagon);
+  //ピッチ角から前足のホームポジションの差分を計算
+  leg[front_right].dx_home = 0.5 * (support_hexagon->short_diagonal * cos(body_state->pitch) - body_state->short_diagonal) - body_state->ZMP_y - leg[front_right].x_base;
+  leg[front_right].dy_home = 0.5 * (support_hexagon->side - body_state->side) - leg[front_right].y_base;
+  leg[front_right].dz_home = -(body_state->cog_height - 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[front_right].z_base;
+
+  leg[front_left].dx_home = 0.5 * (support_hexagon->short_diagonal * cos(body_state->pitch) - body_state->short_diagonal) - body_state->ZMP_y - leg[front_left].x_base;
+  leg[front_left].dy_home = -0.5 * (support_hexagon->side - body_state->side) - leg[front_left].y_base;
+  leg[front_left].dz_home = -(body_state->cog_height - 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[front_left].z_base;
+
+  //ピッチ軸から中脚のホームポジションの差分の計算
+  leg[middle_left].dx_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal) - leg[middle_left].x_base;
+  leg[middle_left].dy_home = -body_state->ZMP_y - leg[middle_left].y_base;
+  leg[middle_left].dz_home = -body_state->cog_height - leg[middle_left].z_base;
+
+  leg[middle_right].dx_home = 0.5 * (support_hexagon->long_diagonal - body_state->long_diagonal) - leg[middle_right].x_base;
+  leg[middle_right].dy_home = body_state->ZMP_y - leg[middle_right].y_base;
+  leg[middle_right].dz_home = -body_state->cog_height - leg[middle_right].z_base;
+
+  //ピッチ軸から後脚のホームポジションの差分を計算
+  leg[rear_right].dx_home = 0.5 * (support_hexagon->short_diagonal * cos(body_state->pitch) - body_state->short_diagonal) + body_state->ZMP_y - leg[rear_right].x_base;
+  leg[rear_right].dy_home = -0.5 * (support_hexagon->side - body_state->side) - leg[rear_right].y_base;
+  leg[rear_right].dz_home = -(body_state->cog_height + 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[rear_right].z_base;
+
+  leg[rear_left].dx_home = 0.5 * (support_hexagon->short_diagonal * cos(body_state->pitch) - body_state->short_diagonal) + body_state->ZMP_y - leg[rear_left].x_base;
+  leg[rear_left].dy_home = 0.5 * (support_hexagon->side - body_state->side) - leg[rear_left].y_base;
+  leg[rear_left].dz_home = -(body_state->cog_height + 0.5 * support_hexagon->short_diagonal * sin(body_state->pitch)) - leg[rear_left].z_base;
+
+  ////////////////////////////////////////////////////ここからロール角に基づく制御
+  //ロール軸から前脚のホームポジションの差分を計算
+  leg[front_right].dx_home = leg[front_right].dx_home + 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal) - leg[front_right].x_base;
+  leg[front_right].dy_home = leg[front_right].dy_home + 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - body_state->ZMP_x - leg[front_right].y_base;
+  leg[front_right].dz_home = leg[front_right].dz_home - (body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[front_right].z_base;
+
+  leg[front_left].dx_home = leg[front_left].dx_home + 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal) - leg[front_left].x_base;
+  leg[front_left].dy_home = leg[front_left].dy_home - (0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + body_state->ZMP_x) - leg[front_left].y_base;
+  leg[front_left].dz_home = leg[front_left].dz_home - (body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[front_left].z_base;
+
+  //ロール軸から中脚のホームポジションの差分を計算
+  leg[middle_left].dx_home = leg[middle_left].dx_home + 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) + body_state->ZMP_x - leg[middle_left].x_base;
+  leg[middle_left].dy_home = leg[middle_left].dy_home + 0 - leg[middle_left].y_base;
+  leg[middle_left].dz_home = leg[middle_left].dz_home - (body_state->cog_height - 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) - leg[middle_left].z_base;
+
+  leg[middle_right].dx_home = leg[middle_right].dx_home + 0.5 * (support_hexagon->long_diagonal * cos(body_state->roll) - body_state->long_diagonal) - body_state->ZMP_x - leg[middle_right].x_base;
+  leg[middle_right].dy_home = leg[middle_right].dy_home + 0 - leg[middle_right].y_base;
+  leg[middle_right].dz_home = leg[middle_right].dz_home - (body_state->cog_height + 0.5 * (support_hexagon->long_diagonal * sin(body_state->roll))) - leg[middle_right].z_base;
+
+  //ロール軸から後脚のホームポジションの差分を計算
+  leg[rear_right].dx_home = leg[rear_right].dx_home + 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal) - leg[rear_right].x_base;
+  leg[rear_right].dy_home = leg[rear_right].dy_home - (0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) - body_state->ZMP_x) - leg[rear_right].y_base;
+  leg[rear_right].dz_home = leg[rear_right].dz_home - (body_state->cog_height + 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[rear_right].z_base;
+
+  leg[rear_left].dx_home = leg[rear_left].dx_home + 0.5 * (support_hexagon->short_diagonal - body_state->short_diagonal) - leg[rear_left].x_base;
+  leg[rear_left].dy_home = leg[rear_left].dy_home + 0.5 * (support_hexagon->side * cos(body_state->roll) - body_state->side) + body_state->ZMP_x - leg[rear_left].y_base;
+  leg[rear_left].dz_home = leg[rear_left].dz_home - (body_state->cog_height - 0.5 * support_hexagon->side * sin(body_state->roll)) - leg[rear_left].z_base;
+
+  printf("leg[front_right]: dx = %f , dy = %f,dz = %f\n", leg[front_right].dx_home, leg[front_right].dy_home, leg[front_right].dz_home);
+  printf("leg[rear_left]: dx = %f , dy = %f,dz = %f\n", leg[rear_left].dx_home, leg[rear_left].dy_home, leg[rear_left].dz_home);
+  int j = front_left;
+  for (int i = 0; i <= j; i++)
+  {
+    leg[i].x_home = leg[i].x_base + leg[i].dx_home;
+    leg[i].y_home = leg[i].y_base + leg[i].dy_home;
+    leg[i].z_home = leg[i].z_base + leg[i].dz_home;
+  };
+}
+
+void pub_encoder_val_to_all_dyanmixel(leg_state leg[], const char *log)
+{
+  leg[middle_left].coxa_arg = leg[middle_left].coxa_arg + M_PI / 5; //ロリコンが狂ったので公正
+  bool result;
+  //radから0から4096の分解能による指令値に変更
+  //モータの正負の違いもここて調節し直す
+  leg[front_right].femur_encoder_val = -1 * (leg[front_right].femur_arg) * (2048 / M_PI) + 2048;
+  leg[front_right].tibia_encoder_val = leg[front_right].tibia_arg * (2048 / M_PI) + 2048;
+  leg[front_right].coxa_encoder_val = leg[front_right].coxa_arg * (2048 / M_PI) + 2048;
+
+  // printf("coxa = %f, femur = %f, tibia = %f \n ", leg[front_left]->coxa_arg * 180 / M_PI, leg[front_left]->femur_arg * 180 / M_PI, leg[front_left]->tibia_arg * 180 / M_PI);
+  leg[front_left].coxa_encoder_val = leg[front_left].coxa_arg * (2048 / M_PI) + 2048;
+  leg[front_left].femur_encoder_val = leg[front_left].femur_arg * (2048 / M_PI) + 2048;
+  leg[front_left].tibia_encoder_val = -1 * (leg[front_left].tibia_arg) * (2048 / M_PI) + 2048;
+
+  leg[middle_right].femur_encoder_val = -1 * (leg[middle_right].femur_arg) * (2048 / M_PI) + 2048;
+  leg[middle_right].tibia_encoder_val = leg[middle_right].tibia_arg * (2048 / M_PI) + 2048;
+  leg[middle_right].coxa_encoder_val = leg[middle_right].coxa_arg * (2048 / M_PI) + 2048;
+
+  leg[middle_left].femur_encoder_val = (leg[middle_left].femur_arg) * (2048 / M_PI) + 2048;
+  leg[middle_left].tibia_encoder_val = -1 * (leg[middle_left].tibia_arg) * (2048 / M_PI) + 2048;
+  leg[middle_left].coxa_encoder_val = leg[middle_left].coxa_arg * (2048 / M_PI) + 2048;
+
+  leg[rear_right].femur_encoder_val = -1 * (leg[rear_right].femur_arg) * (2048 / M_PI) + 2048;
+  leg[rear_right].tibia_encoder_val = leg[rear_right].tibia_arg * (2048 / M_PI) + 2048;
+  leg[rear_right].coxa_encoder_val = leg[rear_right].coxa_arg * (2048 / M_PI) + 2048;
+
+  leg[rear_left].femur_encoder_val = leg[rear_left].femur_arg * (2048 / M_PI) + 2048;
+  leg[rear_left].tibia_encoder_val = -1 * (leg[rear_left].tibia_arg) * (2048 / M_PI) + 2048;
+  leg[rear_left].coxa_encoder_val = leg[rear_left].coxa_arg * (2048 / M_PI) + 2048;
+
+  //それぞれの関節に指令値を代入
+  //デバッグの時はreusultの中身を見る
+  result = dxl_wb.addBulkWriteParam(1, "Goal_Position", leg[front_right].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(2, "Goal_Position", leg[front_right].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(3, "Goal_Position", leg[front_right].tibia_encoder_val, &log);
+  //////////////////////////////////////////////////////////////////////////////
+  result = dxl_wb.addBulkWriteParam(4, "Goal_Position", leg[middle_right].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(5, "Goal_Position", leg[middle_right].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(6, "Goal_Position", leg[middle_right].tibia_encoder_val, &log);
+  //////////////////////////////////////////////////////////////////////////////
+  result = dxl_wb.addBulkWriteParam(7, "Goal_Position", leg[rear_right].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(8, "Goal_Position", leg[rear_right].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(9, "Goal_Position", leg[rear_right].tibia_encoder_val, &log);
+  /////////////////////////////////////////////////////////////////////////////
+  result = dxl_wb.addBulkWriteParam(10, "Goal_Position", leg[rear_left].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(11, "Goal_Position", leg[rear_left].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(12, "Goal_Position", leg[rear_left].tibia_encoder_val, &log);
+  //////////////////////////////////////////////////////////////////////////////
+  result = dxl_wb.addBulkWriteParam(13, "Goal_Position", leg[middle_left].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(14, "Goal_Position", leg[middle_left].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(15, "Goal_Position", leg[middle_left].tibia_encoder_val, &log);
+  ///////////////////////////////////////////////////////////////////////////////
+  result = dxl_wb.addBulkWriteParam(16, "Goal_Position", leg[front_left].coxa_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(17, "Goal_Position", leg[front_left].femur_encoder_val, &log);
+  result = dxl_wb.addBulkWriteParam(18, "Goal_Position", leg[front_left].tibia_encoder_val, &log);
+  dxl_wb.bulkWrite(&log);
+}
+
+// int set_pich_roll_from_jy901(int num_bytes, int serial_port, unsigned char read_buf[], )
+// {
+//   num_bytes = read(serial_port, &read_buf, sizeof(read_buf));
+//   if (num_bytes < 0)
+//   {
+//     printf("Error reading: %s \n", strerror(errno));
+//   }
+//   // printf("%x ", read_buf[0]);
+//   if (read_buf[0] == 0x55)
+//   {
+//     printf("\n");
+//     i = 0;
+//     jy_buf[i] = read_buf[0];
+//   }
+//   jy_buf[i] = read_buf[0];
+
+//   if (i == 10)
+//   {
+//     // printf("|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|\n", jy_buf[0], jy_buf[1], jy_buf[2], jy_buf[3], jy_buf[4], jy_buf[5], jy_buf[6], jy_buf[7], jy_buf[8], jy_buf[9], jy_buf[10]);
+//     // if (jy_buf[1] == 0x51)
+//     // {
+//     //   printf("Acceleration Z : %f \n", ((jy_buf[7] << 8) | jy_buf[6]) / 32768.0 * (16.0 * 9.8));
+//     // }
+//     if (jy_buf[1] == 0x53)
+//     {
+//       printf("pich : %f \n", ((read_buf[6] << 8) | read_buf[4]) / 182.54);
+//       printf("Roll : %f \n", ((read_buf[4] << 8) | read_buf[3]) / 182.54);
+//     }
+//   }
+// }
+
+int main(int argc, char *argv[])
+{
+  ///////////////////////jy901関連////////////////////////////
+
+  ///////////////////////コントローラ関係/////////////////////
+  int fd = open("/dev/input/js0", O_NONBLOCK); //初期化
+  struct js_event event;
+  ////////////////////////dynamixedl関係/////////////////////
+  const char *port_name = "/dev/ttyUSB0";
+  int baud_rate = 2 * 1000 * 1000;
+  uint16_t model_number = 0;
+  uint8_t dxl_id[18];
+
+  dxl_id[0] = 1;
+  dxl_id[1] = 2;
+  dxl_id[2] = 3;
+  dxl_id[3] = 4;
+  dxl_id[4] = 5;
+  dxl_id[5] = 6;
+  dxl_id[6] = 7;
+  dxl_id[7] = 8;
+  dxl_id[8] = 9;
+  dxl_id[9] = 10;
+  dxl_id[10] = 11;
+  dxl_id[11] = 12;
+  dxl_id[12] = 13;
+  dxl_id[13] = 14;
+  dxl_id[14] = 15;
+  dxl_id[15] = 16;
+  dxl_id[16] = 17;
+  dxl_id[17] = 18;
+
+  bool result = false;
+  port_name = "/dev/ttyUSB0";
+  const char *log;
+
+  result = dxl_wb.init(port_name, baud_rate, &log);
+  if (result == false)
+  {
+    printf("%s\n", log);
+    printf("Failed to init\n");
+    return 0;
+  }
+  else
+    printf("Succeed to init(%d)\n", baud_rate);
+
+  //pingを使って通信を確認
+  for (int cnt = 0; cnt <= 17; cnt++)
+  {
+    result = dxl_wb.ping(dxl_id[cnt], &model_number, &log);
+    if (result == false)
+    {
+      printf("%s\n", log);
+      printf("Failed to ping\n");
+    }
+    else
+    {
+      printf("Succeeded to ping\n");
+      printf("id : %d, model_number : %d\n", dxl_id[cnt], model_number);
+    }
+    result = dxl_wb.jointMode(dxl_id[cnt], 0, 0, &log);
+    if (result == false)
+    {
+      printf("%s\n", log);
+      printf("Failed to change joint mode\n");
+    }
+    else
+    {
+      printf("Succeed to change joint mode\n");
+    }
+  }
+
+  result = dxl_wb.initBulkWrite(&log);
+  if (result == false)
+  {
+    printf("%s\n", log);
+  }
+  else
+  {
+    printf("%s\n", log);
+  }
+
+  result = dxl_wb.initBulkRead(&log);
+  if (result == false)
+  {
+    printf("%s\n", log);
+  }
+  else
+  {
+    printf("%s\n", log);
+  }
+
+  result = dxl_wb.addBulkReadParam(dxl_id[0], "Present_Position", &log);
+
+  if (result == false)
+  {
+    printf("%s\n", log);
+    printf("Failed to add bulk read position param\n");
+  }
+  else
+  {
+    printf("%s\n", log);
+  }
+
+  double count = 0.0;
+  int i = 0;
+  controler_state *controler;
+  controler = (controler_state *)malloc(sizeof(controler_state));
+  hexapod_body_state body_state[1];
+  support_polygon support_hexagon[1];
+  leg_state leg[6];
+  printf("sup_hex_long_diag %f\n", support_hexagon->long_diagonal);
+
+  while (controler->start == 0)
+  {
+    //コントローラからの値の読み込みと代入
+    read(fd, &event, sizeof(event));
+    write_controler_state(controler, event);
+    set_val_from_controller(leg, event, controler, body_state);
+    controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
+    flat_terrain_walk_rajectory(leg, body_state, count);
+    rotate_trajectory_depending_joy(leg, body_state, support_hexagon, controler, count);
+
+    printf("button %u pressed, vale %d  \n", event.number, event.value);
+    printf("roll %f π\n", body_state->roll / M_PI);
+
+    //printf("leg[middle_right]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[middle_right].coxa_arg / M_PI, leg[middle_right].femur_arg / M_PI, leg[middle_right].tibia_arg / M_PI);
+    printf("leg[middle_right]_cordinate: x = %f , y = %f,z = %f\n", leg[middle_right].x, leg[middle_right].y, leg[middle_right].z);
+    printf("leg[middle_left]_cordinate: x = %f , y = %f,z = %f\n", leg[middle_left].x, leg[middle_left].y, leg[middle_left].z);
+
+    // printf("leg[front_right]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[front_right].coxa_arg / M_PI, leg[front_right].femur_arg / M_PI, leg[front_right].tibia_arg / M_PI);
+    //printf("leg[front_right]_cordinate: x = %f , y = %f,z = %f\n", leg[front_right].x, leg[front_right].y, leg[front_right].z);
+    printf("leg[front_right]_cordinate: x = %f , y = %f,z = %f\n", leg[front_right].x, leg[front_right].y, leg[front_right].z);
+    //printf("leg[front_right]: dx = %f , dy = %f,dz = %f\n", leg[front_right].dx, leg[front_right].dy, leg[front_right].dz);
+
+    // printf("leg[front_left]_arg: coxa = %f π,femur = %f　π,tibia = %f π\n", leg[front_left].coxa_arg / M_PI, leg[front_left].femur_arg / M_PI, leg[front_left].tibia_arg / M_PI);
+    printf("leg[front_left]_cordinate: x = %f , y = %f,z = %f\n", leg[front_left].x, leg[front_left].y, leg[front_left].z);
+
+    printf("leg[rear_right]_cordinate: x = %f , y = %f,z = %f\n", leg[rear_right].x, leg[rear_right].y, leg[rear_right].z);
+    printf("leg[rear_left]_cordinate: x = %f , y = %f,z = %f\n", leg[rear_left].x, leg[rear_left].y, leg[rear_left].z);
+
+    set_joint_arg_by_inv_dynamics(leg);
+    pub_encoder_val_to_all_dyanmixel(leg, log);
+    count++;
+    usleep(5000);
+  }
+  return 0;
+}
