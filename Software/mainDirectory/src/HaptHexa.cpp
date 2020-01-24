@@ -253,7 +253,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
   }
 }
 
-void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state *controler, hexapod_body_state *body_state)
+void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state *controler, hexapod_body_state *body_state, support_polygon *support_hex)
 {
   //コントローラクラスの値をロボットに適用
   double x0, x1;
@@ -286,6 +286,16 @@ void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state
   if (controler->B == 1)
   {
     body_state->cog_height = body_state->cog_height - 0.1;
+  }
+  if (controler->X)
+  {
+    support_hex->long_diagonal = support_hex->long_diagonal + 0.1;
+    support_hex->short_diagonal = support_hex->long_diagonal * 0.5 * sqrt(3.0);
+  }
+  if (controler->Y)
+  {
+    support_hex->long_diagonal = support_hex->long_diagonal - 0.1;
+    support_hex->short_diagonal = support_hex->long_diagonal * 0.5 * sqrt(3.0);
   }
   // printf("x:%f y:%f \n", x1, y1);
 }
@@ -877,7 +887,7 @@ int main(int argc, char *argv[])
     if (body_state->mode == manualMode)
     {
       //ボディーにコントローラからの情報を書き込む，（ヨー，ピッチなど）
-      set_val_from_controller(leg, event, controler, body_state);
+      set_val_from_controller(leg, event, controler, body_state, support_hexagon);
     }
     if (body_state->mode == auto_attitude_mode)
     {
