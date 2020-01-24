@@ -37,7 +37,7 @@ public:
 
 enum mode
 {
-  autoMode,
+  auto_attitude_mode,
   manualMode,
 };
 
@@ -821,7 +821,7 @@ int main(int argc, char *argv[])
     //コントローラからの値の読み込み
     read(fd, &event, sizeof(event));
     write_controler_state(controler, event);
-    if (controler->back == 1 && body_state->mode == autoMode && body_state->mode_is_alrdy_changed == 0)
+    if (controler->back == 1 && body_state->mode == auto_attitude_mode && body_state->mode_is_alrdy_changed == 0)
     {
       body_state->mode = manualMode;
       body_state->mode_is_alrdy_changed = 1;
@@ -829,7 +829,7 @@ int main(int argc, char *argv[])
 
     if (controler->back == 1 && body_state->mode == manualMode && body_state->mode_is_alrdy_changed == 0)
     {
-      body_state->mode = autoMode;
+      body_state->mode = auto_attitude_mode;
       body_state->mode_is_alrdy_changed = 1;
     }
 
@@ -846,7 +846,7 @@ int main(int argc, char *argv[])
       //ボディーにコントローラからの情報を書き込む，（ヨー，ピッチなど）
       set_val_from_controller(leg, event, controler, body_state);
     }
-    if (body_state->mode == autoMode)
+    if (body_state->mode == auto_attitude_mode)
     {
       set_val_from_jy901_and_controller(leg, controler, jy901, body_state);
     }
