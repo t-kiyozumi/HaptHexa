@@ -47,7 +47,7 @@ public:
   const double side = 8.0, long_diagonal = 16.0, short_diagonal = 8 * sqrt(3.0);
   double yaw = 0.0, pitch = 0.0, roll = 0.0;
   double cog_height = 12.5;
-  double ZMP_x = 0.0, ZMP_y;
+  double ZMP_x, ZMP_y;
   int mode = manualMode;
   int mode_is_alrdy_changed;
 };
@@ -274,7 +274,7 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   double delta_roll;
   double delta_pitch;
   //x0,y0は左のジョイスティック（進行方向用）
-  //x1,y1は右のジョイスティック(姿勢制御用)
+  //x1,y1は右のジョイスティック（重心制御）
   x0 = (double)controler->axes0_x;
   y0 = (double)controler->axes0_y;
 
@@ -297,6 +297,9 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   delta_pitch = (0 + jy901->pich) * 0.025;
   body_state->pitch = body_state->pitch + delta_pitch;
 
+  body_state->ZMP_y = 5.0 * (y1 / 36000.0);
+  body_state->ZMP_x = 5.0 * (x1 / 36000.0);
+  printf("zmp_x %f,x1 %f \n", body_state->ZMP_x, x1);
   // body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
   // body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
   // printf("x:%f y:%f \n", x1, y1);
@@ -859,6 +862,7 @@ int main(int argc, char *argv[])
     printf("roll order:%f π\n", body_state->roll / M_PI);
     printf("button %u pressed, vale %d  \n", event.number, event.value);
     printf("back %d, mode:%d \n", controler->back, body_state->mode);
+    printf("zmp_x %f,zmp_y %f", body_state->ZMP_x, body_state->ZMP_y);
 
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
