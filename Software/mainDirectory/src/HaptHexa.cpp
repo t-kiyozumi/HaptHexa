@@ -100,6 +100,22 @@ void write_controler_state(controler_state *controler, js_event event)
   switch (event.type)
   {
   case JS_EVENT_BUTTON:
+    if (event.number == 1)
+    {
+      controler->A = event.value;
+    }
+    if (event.number == 2)
+    {
+      controler->B = event.value;
+    }
+    if (event.number == 0)
+    {
+      controler->X = event.value;
+    }
+    if (event.number == 3)
+    {
+      controler->Y = event.value;
+    }
     if (event.number == 4)
     {
       controler->LB = event.value;
@@ -262,6 +278,15 @@ void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state
   }
   body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
   body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
+
+  if (controler->A == 1)
+  {
+    body_state->cog_height = body_state->cog_height + 0.1;
+  }
+  if (controler->B == 1)
+  {
+    body_state->cog_height = body_state->cog_height - 0.1;
+  }
   // printf("x:%f y:%f \n", x1, y1);
 }
 
@@ -300,6 +325,14 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   body_state->ZMP_y = 5.0 * (y1 / 36000.0);
   body_state->ZMP_x = 5.0 * (x1 / 36000.0);
   printf("zmp_x %f,x1 %f \n", body_state->ZMP_x, x1);
+  if (controler->A == 1)
+  {
+    body_state->cog_height = body_state->cog_height + 0.1;
+  }
+  if (controler->B == 1)
+  {
+    body_state->cog_height = body_state->cog_height - 0.1;
+  }
   // body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
   // body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
   // printf("x:%f y:%f \n", x1, y1);
