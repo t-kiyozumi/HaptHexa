@@ -74,7 +74,7 @@ public:
   double dx_home = 0.0, dy_home = 0.0, dz_home = 0.0;
   double x_home = 0.0, y_home = 0.0, z_home = 0.0;
   double x_base, y_base, z_base;
-  double trajectory_hight = 3.0, trajectory_width = 5.0;
+  double trajectory_hight = 10.0, trajectory_width = 5.0;
   double trajectory_yaw = 0.0, trajectory_pitch = 0.0;
   double trajectory_velocity;
 };
@@ -326,10 +326,10 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
     tmp_leg[i].trajectory_velocity = (sqrt(pow(abs(x0), 2.0) + pow(abs(y0), 2.0))) / 36000;
   }
 
-  delta_roll = (0 - jy901->roll) * 0.025;
+  delta_roll = (0 - jy901->roll) * 0.07;
   body_state->roll = body_state->roll + delta_roll;
 
-  delta_pitch = (0 + jy901->pich) * 0.025;
+  delta_pitch = (0 + jy901->pich) * 0.07;
   body_state->pitch = body_state->pitch + delta_pitch;
 
   body_state->ZMP_y = 5.0 * (y1 / 36000.0);
@@ -343,9 +343,20 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   {
     body_state->cog_height = body_state->cog_height - 0.1;
   }
-  // body_state->roll = -(1.5 * M_PI / 18.0) * (x1 / 36000);
-  // body_state->pitch = (1.5 * M_PI / 18.0) * (y1 / 36000);
-  // printf("x:%f y:%f \n", x1, y1);
+  // if (controler->Y == 1)
+  // {
+  //   for (int i = 0; i <= j; i++)
+  //   {
+  //     tmp_leg[i].trajectory_hight = tmp_leg[i].trajectory_hight + 0.05;
+  //   }
+  // }
+  // if (controler->X == 1)
+  // {
+  //   for (int i = 0; i <= j; i++)
+  //   {
+  //     tmp_leg[i].trajectory_hight = tmp_leg[i].trajectory_hight - 0.05;
+  //   }
+  // }
 }
 
 void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_body_state, double count)
@@ -822,6 +833,7 @@ int main(int argc, char *argv[])
   memset(&tty, 0, sizeof tty);
 
   // Read in existing settings, and handle any error
+
   if (tcgetattr(serial_port, &tty) != 0)
   {
     printf("Error %i from tcgetattr: %s\n", errno, strerror(errno));
@@ -857,7 +869,12 @@ int main(int argc, char *argv[])
   {
     printf("Error %i from tcsetattr: %s\n", errno, strerror(errno));
   }
+  //角度を記録するログファイル
+  FILE *jyRecFile;
+  jyRecFile = fopen("jyRec.txt", "w");
+  fprintf(jyRecFile, "jyPitch,jyRoll,estimateTerrainPich,estimateTerrainRoll\n");
 
+  //メインのループ，拡張したいときはここを中心にいじる
   while (controler->start == 0)
   {
 
@@ -891,8 +908,11 @@ int main(int argc, char *argv[])
     }
     if (body_state->mode == auto_attitude_mode)
     {
+      //自動姿勢制御モードコントローラ+jy901からデータを取り代入する
       set_val_from_jy901_and_controller(leg, controler, jy901, body_state);
     }
+    //コントローラからの指示値で歩行器道の高さを決定
+    //段差や不整地に対応
 
     controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
     flat_terrain_walk_rajectory(leg, body_state, count);
@@ -906,12 +926,14 @@ int main(int argc, char *argv[])
     printf("button %u pressed, vale %d  \n", event.number, event.value);
     printf("back %d, mode:%d \n", controler->back, body_state->mode);
     printf("zmp_x %f,zmp_y %f", body_state->ZMP_x, body_state->ZMP_y);
+    fprintf(jyRecFile, "%f,%f,%f,%f\n", jy901->pich, jy901->roll, body_state->pitch, body_state->roll);
 
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
     count++;
     usleep(5000);
   }
+  fclose(jyRecFile);
   close(serial_port);
   return 0;
 }
