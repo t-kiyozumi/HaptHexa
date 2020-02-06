@@ -28,6 +28,17 @@ enum leg_num
   front_left,
 };
 
+class PID_parm
+{
+public:
+  double DELTA_T;
+  double KP = 0.09;
+  double KD = 0.0;
+  double KI;
+  double dif[2];
+  double currentTime;
+  double pastTime;
+};
 class support_polygon
 {
 public:
@@ -86,7 +97,7 @@ public:
   double dx_home = 0.0, dy_home = 0.0, dz_home = 0.0;
   double x_home = 0.0, y_home = 0.0, z_home = 0.0;
   double x_base, y_base, z_base;
-  double trajectory_hight =6.0, trajectory_width = 5.0;
+  double trajectory_hight = 10.0, trajectory_width = 5.0;
   double trajectory_yaw = 0.0, trajectory_pitch = 0.0;
   double trajectory_velocity;
 };
@@ -312,7 +323,7 @@ void set_val_from_controller(leg_state *tmp_leg, js_event event, controler_state
   // printf("x:%f y:%f \n", x1, y1);
 }
 
-void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *controler, jy901_state *jy901, hexapod_body_state *body_state)
+void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *controler, jy901_state *jy901, hexapod_body_state *body_state, PID_parm *PIDpitch, PID_parm *PIDroll)
 {
   //コントローラクラスの値をロボットに適用
   double x0, x1;
@@ -320,6 +331,8 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   int j = front_left;
   double delta_roll;
   double delta_pitch;
+  struct timeval currentTime;
+
   //x0,y0は左のジョイスティック（進行方向用）
   //x1,y1は右のジョイスティック（重心制御）
   x0 = (double)controler->axes0_x;
@@ -338,8 +351,18 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
     tmp_leg[i].trajectory_velocity = (sqrt(pow(abs(x0), 2.0) + pow(abs(y0), 2.0))) / 36000;
   }
 
-  delta_roll = (0 - jy901->roll) * 0.09;
-  body_state->roll = body_state->roll + delta_roll;
+  double p, i, d;
+  gettimeofday(&currentTime, NULL);
+  PIDroll->pastTime = PIDroll->currentTime;
+  PIDroll->currentTime = (currentTime.tv_usec) * 0.000001;
+  PIDroll->DELTA_T = PIDroll->currentTime - PIDroll->pastTime;
+
+  PIDroll->dif[0] = PIDroll->dif[1];
+  PIDroll->dif[1] = 0 - jy901->roll;
+
+  p = PIDroll->KP * PIDroll->dif[1];
+  d = PIDroll->KD * (PIDroll->dif[1] - PIDroll->dif[0]) / PIDroll->DELTA_T;
+  body_state->roll = body_state->roll + p + d;
 
   delta_pitch = (0 + jy901->pich) * 0.09;
   body_state->pitch = body_state->pitch + delta_pitch;
@@ -832,6 +855,8 @@ int main(int argc, char *argv[])
   ///////////////////ロボットの要素//////////////////////////
   double count = 0.0;
   controler_state *controler;
+  PID_parm PIDpitch[1];
+  PID_parm PIDroll[1];
   controler = (controler_state *)malloc(sizeof(controler_state));
   hexapod_body_state body_state[1];
   support_polygon support_hexagon[1];
@@ -968,7 +993,7 @@ int main(int argc, char *argv[])
     if (body_state->mode == auto_attitude_mode)
     {
       //自動姿勢制御モードコントローラ+jy901からデータを取り代入する
-      set_val_from_jy901_and_controller(leg, controler, jy901, body_state);
+      set_val_from_jy901_and_controller(leg, controler, jy901, body_state, PIDpitch, PIDroll);
     }
 
     controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
