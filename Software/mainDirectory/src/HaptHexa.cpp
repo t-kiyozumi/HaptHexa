@@ -56,9 +56,9 @@ public:
 class jy901_state
 {
 public:
-  double yaw=0;
-  double roll=0;
-  double pich=0;
+  double yaw = 0;
+  double roll = 0;
+  double pich = 0;
   double accX;
   double accY;
   double accZ;
@@ -86,7 +86,7 @@ public:
   double dx_home = 0.0, dy_home = 0.0, dz_home = 0.0;
   double x_home = 0.0, y_home = 0.0, z_home = 0.0;
   double x_base, y_base, z_base;
-  double trajectory_hight = 8.0, trajectory_width = 3.0;
+  double trajectory_hight =6.0, trajectory_width = 5.0;
   double trajectory_yaw = 0.0, trajectory_pitch = 0.0;
   double trajectory_velocity;
 };
@@ -188,11 +188,11 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
   {
     if (controler->RB)
     {
-      delta_yaw = (M_PI / 18.0) * sin(count * M_PI * 2 * 0.003012);
+      delta_yaw = (M_PI / 18.0) * sin(count * M_PI * 2 * 0.0020125);
     }
     if (controler->LB)
     {
-      delta_yaw = -(M_PI / 18.0) * sin(count * M_PI * 2 * 0.003012);
+      delta_yaw = -(M_PI / 18.0) * sin(count * M_PI * 2 * 0.0020125);
     }
 
     // int k = middle_right;
@@ -203,7 +203,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
         tmp_leg[i].y = -(0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->side);
-        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -213,7 +213,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = 0.5 * support_hexagon->long_diagonal * cos(delta_yaw) - 0.5 * tmp_body_state->long_diagonal;
         tmp_leg[i].y = 0.5 * support_hexagon->long_diagonal * sin(delta_yaw);
-        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -223,7 +223,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
         tmp_leg[i].y = (0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->side);
-        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home + 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -235,7 +235,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
         tmp_leg[i].y = -(0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) - delta_yaw) - 0.5 * tmp_body_state->side);
-        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -245,7 +245,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = 0.5 * support_hexagon->long_diagonal * cos(-delta_yaw) - 0.5 * tmp_body_state->long_diagonal;
         tmp_leg[i].y = 0.5 * support_hexagon->long_diagonal * sin(-delta_yaw);
-        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -255,7 +255,7 @@ void rotate_trajectory_depending_joy(leg_state *tmp_leg, hexapod_body_state *tmp
       {
         tmp_leg[i].x = (0.5 * support_hexagon->long_diagonal * sin((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->short_diagonal);
         tmp_leg[i].y = (0.5 * support_hexagon->long_diagonal * cos((M_PI / 3.0) + delta_yaw) - 0.5 * tmp_body_state->side);
-        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].z = tmp_leg[i].z_home - 3 * cos(count * M_PI * 2 * 0.0020125);
         if (tmp_leg[i].z <= tmp_leg[i].z_home)
         {
           tmp_leg[i].z = tmp_leg[i].z_home;
@@ -338,10 +338,10 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
     tmp_leg[i].trajectory_velocity = (sqrt(pow(abs(x0), 2.0) + pow(abs(y0), 2.0))) / 36000;
   }
 
-  delta_roll = (0 - jy901->roll) * 0.05;
+  delta_roll = (0 - jy901->roll) * 0.09;
   body_state->roll = body_state->roll + delta_roll;
 
-  delta_pitch = (0 + jy901->pich) * 0.05;
+  delta_pitch = (0 + jy901->pich) * 0.09;
   body_state->pitch = body_state->pitch + delta_pitch;
 
   body_state->ZMP_y = 5.0 * (y1 / 36000.0);
@@ -390,14 +390,14 @@ void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_bod
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
       // printf("trajectory pich :%f trajecotyr yaw :%f \n ", tmp_leg[i].trajectory_pitch, tmp_leg[i].trajectory_yaw);
 
-      tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
-      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI);
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI))
       {
-        tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
-        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+        tmp_leg[i].x = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI);
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI);
       }
     }
 
@@ -405,70 +405,70 @@ void flat_terrain_walk_rajectory(leg_state *tmp_leg, hexapod_body_state *tmp_bod
     {
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
-      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125))
       {
-        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125);
       }
     }
     if (i == front_right)
     {
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
-      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125))
       {
-        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125);
       }
     }
     if (i == front_left)
     {
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
-      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
-      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI));
+      tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI))
       {
-        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
-        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+        tmp_leg[i].y = (tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI));
+        tmp_leg[i].x = (tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI);
       }
     }
     if (i == rear_left)
     {
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
-      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
-      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012 + M_PI);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI))
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI));
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125 + M_PI);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI))
       {
-        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
-        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012 + M_PI);
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI));
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125 + M_PI);
       }
     }
     if (i == rear_right)
     {
       tmp_leg[i].trajectory_pitch = atan(sin(tmp_leg[i].trajectory_yaw) * tan(-tmp_body_state->roll) + cos(tmp_leg[i].trajectory_yaw) * tan(tmp_body_state->pitch));
 
-      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012));
-      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.003012);
-      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012))
+      tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * sin(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) - tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_yaw) * sin(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125));
+      tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125) + tmp_leg[i].trajectory_hight * cos(tmp_leg[i].trajectory_pitch) * cos(count * M_PI * 2 * 0.0020125);
+      if (tmp_leg[i].z <= tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125))
       {
-        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012));
-        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.003012);
+        tmp_leg[i].y = -(tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].x = -(tmp_leg[i].trajectory_width * cos(tmp_leg[i].trajectory_yaw) * cos(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125));
+        tmp_leg[i].z = tmp_leg[i].trajectory_width * sin(tmp_leg[i].trajectory_pitch) * sin(count * M_PI * 2 * 0.0020125);
       }
     }
   }
@@ -929,7 +929,7 @@ int main(int argc, char *argv[])
   ///////////////////実験データ記録ファイルのための準備//////////////////////////////////////////
   FILE *jyRecFile;
   jyRecFile = fopen("jyRec.txt", "w");
-  fprintf(jyRecFile, "terrainPitch,terrainroll,jyPitch,jyRoll,estimateTerrainPich,estimateTerrainRoll,time\n");
+  fprintf(jyRecFile, "POSIXtime,terrainPitch,terrainroll,jyPitch,jyRoll,estimateTerrainPich,estimateTerrainRoll\n");
   struct timeval currentTime; //現在時刻を格納する構造体変数
 
   //メインのループ，拡張したいときはここを中心にいじる
@@ -974,23 +974,28 @@ int main(int argc, char *argv[])
     controll_attitude_by_yaw_pich(leg, body_state, support_hexagon, count);
     flat_terrain_walk_rajectory(leg, body_state, count);
     rotate_trajectory_depending_joy(leg, body_state, support_hexagon, controler, count);
-    
-    //現在時刻の所得
-    gettimeofday(&currentTime,NULL);
 
+    //現在時刻の所得
+    gettimeofday(&currentTime, NULL);
 
     printf("/////////////hex Infoation//////////////////\n");
-    printf("pich by Jy901: %f π\n", jy901->pich / M_PI);
-    printf("Roll by jy901: %f π\n", jy901->roll / M_PI);
-    printf("pich by terrain: %f π\n", terrainJy->pich / M_PI);
-    printf("Roll by terrain: %f π\n", terrainJy->roll / M_PI);
-    printf("currentTime: %ld.%06lu \n",currentTime.tv_sec,currentTime.tv_usec);
+    // printf("pich by Jy901: %f π\n", jy901->pich / M_PI);
+    // printf("Roll by jy901: %f π\n", jy901->roll / M_PI);
+    printf("pich by Jy901: %f °\n", (jy901->pich / M_PI) * 180);
+    printf("Roll by jy901: %f °\n", (jy901->roll / M_PI) * 180);
+
+    // printf("pich by terrain: %f π\n", terrainJy->pich / M_PI);
+    // printf("Roll by terrain: %f π\n", terrainJy->roll / M_PI);
+    printf("pich by terrain: %f π\n", (terrainJy->pich / M_PI) * 180);
+    printf("Roll by terrain: %f π\n", (terrainJy->roll / M_PI) * 180);
+
+    printf("currentTime: %ld.%06lu \n", currentTime.tv_sec, currentTime.tv_usec);
     // printf("pich order:%f π\n", body_state->pitch / M_PI);
     // printf("roll order:%f π\n", body_state->roll / M_PI);
     // printf("button %u pressed, vale %d  \n", event.number, event.value);
     // printf("back %d, mode:%d \n", controler->back, body_state->mode);
     // printf("zmp_x %f,zmp_y %f", body_state->ZMP_x, body_state->ZMP_y);
-    fprintf(jyRecFile, "%f,%f,%f,%f,%f,%f,%ld.%06lu \n", terrainJy->pich, terrainJy->roll, jy901->pich, jy901->roll, body_state->pitch, body_state->roll,currentTime.tv_sec,currentTime.tv_usec);
+    fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180, (terrainJy->roll / M_PI) * 180, (jy901->pich / M_PI) * 180, (jy901->roll / M_PI) * 180, (body_state->pitch / M_PI) * 180, (body_state->roll / M_PI) * 180);
 
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
