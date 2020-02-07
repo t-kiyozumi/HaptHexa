@@ -32,8 +32,8 @@ class PID_parm
 {
 public:
   double DELTA_T;
-  double KP = 0.09;
-  double KD = 0.0;
+  double KP = 0.23;
+  double KD = 0.0023;
   double KI;
   double dif[2];
   double currentTime;
@@ -67,23 +67,15 @@ public:
 class jy901_state
 {
 public:
-  double yaw = 0;
-  double roll = 0;
-  double pich = 0;
+  double yaw = 0.0;
+  double roll = 0.0;
+  double pich = 0.0;
   double accX;
   double accY;
   double accZ;
-};
-
-class terrain_state
-{
-public:
-  double yaw;
-  double roll;
-  double pich;
-  double accX;
-  double accY;
-  double accZ;
+  double roll_offset = 0.0;
+  double pitch_offset = 0.0;
+  int is_calibration = 0;
 };
 
 class leg_state
@@ -109,6 +101,7 @@ typedef struct
   uint16_t A;
   uint16_t B;
   uint16_t LB;
+  uint16_t LT;
   uint16_t RB;
   uint16_t start;
   uint16_t back;
@@ -146,6 +139,10 @@ void write_controler_state(controler_state *controler, js_event event)
     if (event.number == 5)
     {
       controler->RB = event.value;
+    }
+    if (event.number == 6)
+    {
+      controler->LT = event.value;
     }
     if (event.number == 9)
     {
@@ -353,19 +350,27 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
 
   double p, i, d;
   gettimeofday(&currentTime, NULL);
+
+  //微分のための微小時間の計算
   PIDroll->pastTime = PIDroll->currentTime;
   PIDroll->currentTime = (currentTime.tv_usec) * 0.000001;
   PIDroll->DELTA_T = PIDroll->currentTime - PIDroll->pastTime;
+  PIDpitch->DELTA_T = PIDroll->DELTA_T;
 
+  //ロール軸のPD制御
   PIDroll->dif[0] = PIDroll->dif[1];
   PIDroll->dif[1] = 0 - jy901->roll;
 
   p = PIDroll->KP * PIDroll->dif[1];
-  d = PIDroll->KD * (PIDroll->dif[1] - PIDroll->dif[0]) / PIDroll->DELTA_T;
-  body_state->roll = body_state->roll + p + d;
+  d = PIDroll->KD * (PIDroll->dif[0] - PIDroll->dif[1]) / PIDroll->DELTA_T;
+  body_state->roll = body_state->roll + p - d;
+  //ピッチ軸のPD制御
+  PIDpitch->dif[0] = PIDpitch->dif[1];
+  PIDpitch->dif[1] = 0 + jy901->pich;
 
-  delta_pitch = (0 + jy901->pich) * 0.09;
-  body_state->pitch = body_state->pitch + delta_pitch;
+  p = PIDpitch->KP * PIDpitch->dif[1];
+  d = PIDpitch->KD * (PIDpitch->dif[0] - PIDpitch->dif[1]) / PIDpitch->DELTA_T;
+  body_state->pitch = body_state->pitch + p - d;
 
   body_state->ZMP_y = 5.0 * (y1 / 36000.0);
   body_state->ZMP_x = 5.0 * (x1 / 36000.0);
@@ -640,7 +645,6 @@ void controll_attitude_by_yaw_pich(leg_state leg[], hexapod_body_state *body_sta
 
 void pub_encoder_val_to_all_dyanmixel(leg_state leg[], const char *log)
 {
-  leg[middle_left].coxa_arg = leg[middle_left].coxa_arg + M_PI / 5; //ロリコンが狂ったので公正
   bool result;
   //radから0から4096の分解能による指令値に変更
   //モータの正負の違いもここて調節し直す
@@ -732,19 +736,21 @@ void read_jy(int fd, jy901_state *jy901)
       // printf("|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|%x|\n", jy_buf[0], jy_buf[1], jy_buf[2], jy_buf[3], jy_buf[4], jy_buf[5], jy_buf[6], jy_buf[7], jy_buf[8], jy_buf[9], jy_buf[10]);
       if (jy_buf[1] == 0x53)
       {
-        jy901->pich = (((read_buf[6] << 8) | read_buf[4]) / 182.54);
+        jy901->pich = (((read_buf[6] << 8) | read_buf[5]) / 182.54);
         jy901->roll = (((read_buf[4] << 8) | read_buf[3]) / 182.54);
-        if (180 <= jy901->pich && jy901->pich <= 360)
+        if (180.0 <= jy901->pich && jy901->pich <= 360.0)
         {
-          jy901->pich = jy901->pich - 360;
+          jy901->pich = jy901->pich - 360.0;
         }
-        if (180 <= jy901->roll && jy901->roll <= 360)
+        if (180.0 <= jy901->roll && jy901->roll <= 360.0)
         {
-          jy901->roll = jy901->roll - 360;
+          jy901->roll = jy901->roll - 360.0;
         }
-        jy901->pich = jy901->pich * (M_PI / 180);
-        jy901->roll = jy901->roll * (M_PI / 180);
+        jy901->pich = jy901->pich * (M_PI / 180.0);
+        jy901->roll = jy901->roll * (M_PI / 180.0);
       }
+      jy901->pich = jy901->pich - jy901->pitch_offset;
+      jy901->roll = jy901->roll - jy901->roll_offset;
       break;
     }
     i++;
@@ -981,9 +987,24 @@ int main(int argc, char *argv[])
       body_state->mode_is_alrdy_changed = 0;
     }
 
+    //jy901のキャリブレーション
+    if (controler->LT == 1 && jy901->is_calibration == 0)
+    {
+      jy901->roll_offset = jy901->roll;
+      jy901->pitch_offset = jy901->pich;
+      jy901->is_calibration = 1;
+      // terrainJy->pitch_offset = terrainJy->pich;
+      // terrainJy->roll_offset = terrainJy->roll;
+    }
+    if (controler->LT == 1 && terrainJy->is_calibration == 0)
+    {
+      terrainJy->pitch_offset = terrainJy->pich;
+      terrainJy->roll_offset = terrainJy->roll;
+      terrainJy->is_calibration = 1;
+    }
     //jy901からの値の読み込み
-    read_jy(serial_port, jy901);
-    //read_jy(tr_serial_port, terrainJy);
+    read_jy(serial_port, jy901); //ロボット搭載のjy901
+    //read_jy(tr_serial_port, terrainJy); //実験フィールド用のjy901
 
     if (body_state->mode == manualMode)
     {
@@ -1002,25 +1023,14 @@ int main(int argc, char *argv[])
 
     //現在時刻の所得
     gettimeofday(&currentTime, NULL);
-
     printf("/////////////hex Infoation//////////////////\n");
-    // printf("pich by Jy901: %f π\n", jy901->pich / M_PI);
-    // printf("Roll by jy901: %f π\n", jy901->roll / M_PI);
-    printf("pich by Jy901: %f °\n", (jy901->pich / M_PI) * 180);
-    printf("Roll by jy901: %f °\n", (jy901->roll / M_PI) * 180);
-
-    // printf("pich by terrain: %f π\n", terrainJy->pich / M_PI);
-    // printf("Roll by terrain: %f π\n", terrainJy->roll / M_PI);
-    printf("pich by terrain: %f π\n", (terrainJy->pich / M_PI) * 180);
-    printf("Roll by terrain: %f π\n", (terrainJy->roll / M_PI) * 180);
+    printf("pich by Jy901: %f °\n", (jy901->pich / M_PI) * 180.0);
+    printf("Roll by jy901: %f °\n", (jy901->roll / M_PI) * 180.0);
+    printf("pich by terrain: %f °\n", (terrainJy->pich / M_PI) * 180.0);
+    printf("Roll by terrain: %f °\n", (terrainJy->roll / M_PI) * 180.0);
 
     printf("currentTime: %ld.%06lu \n", currentTime.tv_sec, currentTime.tv_usec);
-    // printf("pich order:%f π\n", body_state->pitch / M_PI);
-    // printf("roll order:%f π\n", body_state->roll / M_PI);
-    // printf("button %u pressed, vale %d  \n", event.number, event.value);
-    // printf("back %d, mode:%d \n", controler->back, body_state->mode);
-    // printf("zmp_x %f,zmp_y %f", body_state->ZMP_x, body_state->ZMP_y);
-    fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180, (terrainJy->roll / M_PI) * 180, (jy901->pich / M_PI) * 180, (jy901->roll / M_PI) * 180, (body_state->pitch / M_PI) * 180, (body_state->roll / M_PI) * 180);
+    fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180.0, (terrainJy->roll / M_PI) * 180.0, (jy901->pich / M_PI) * 180.0, (jy901->roll / M_PI) * 180.0, (body_state->pitch / M_PI) * 180.0, (body_state->roll / M_PI) * 180.0);
 
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
