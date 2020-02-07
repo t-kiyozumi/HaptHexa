@@ -103,6 +103,7 @@ typedef struct
   uint16_t LB;
   uint16_t LT;
   uint16_t RB;
+  uint16_t RT;
   uint16_t start;
   uint16_t back;
   int16_t axes1_x;
@@ -143,6 +144,10 @@ void write_controler_state(controler_state *controler, js_event event)
     if (event.number == 6)
     {
       controler->LT = event.value;
+    }
+    if (event.number == 7)
+    {
+      controler->RT = event.value;
     }
     if (event.number == 9)
     {
@@ -1032,6 +1037,11 @@ int main(int argc, char *argv[])
     printf("currentTime: %ld.%06lu \n", currentTime.tv_sec, currentTime.tv_usec);
     fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180.0, (terrainJy->roll / M_PI) * 180.0, (jy901->pich / M_PI) * 180.0, (jy901->roll / M_PI) * 180.0, (body_state->pitch / M_PI) * 180.0, (body_state->roll / M_PI) * 180.0);
 
+    ////実験データを見やすくするためのマーカー
+    if (controler->RT)
+    {
+      fprintf(jyRecFile, "////marker////\n");
+    }
     set_joint_arg_by_inv_dynamics(leg);
     pub_encoder_val_to_all_dyanmixel(leg, log);
     count++;
