@@ -32,9 +32,10 @@ class PID_parm
 {
 public:
   double DELTA_T;
-  double KP = 0.23;
-  double KD = 0.0023;
-  double KI;
+  double KP = 2.50;
+  double KD = 0.0001;
+  double KI = 50.0;
+  double int_err = 0.0;
   double dif[2];
   double currentTime;
   double pastTime;
@@ -362,24 +363,42 @@ void set_val_from_jy901_and_controller(leg_state *tmp_leg, controler_state *cont
   PIDroll->DELTA_T = PIDroll->currentTime - PIDroll->pastTime;
   PIDpitch->DELTA_T = PIDroll->DELTA_T;
 
-  //ロール軸のPD制御
+  //ロール軸のPID制御
+  //偏差の計算
   PIDroll->dif[0] = PIDroll->dif[1];
-  PIDroll->dif[1] = 0 - jy901->roll;
+  PIDroll->dif[1] = 0.0 - jy901->roll;
+  //偏差の積分
+  //PIDroll->int_err = PIDroll->int_err + PIDroll->dif[1] * PIDroll->DELTA_T;
+  PIDroll->int_err = PIDroll->int_err + PIDroll->dif[1] * 0.01;
 
   p = PIDroll->KP * PIDroll->dif[1];
-  d = PIDroll->KD * (PIDroll->dif[0] - PIDroll->dif[1]) / PIDroll->DELTA_T;
-  body_state->roll = body_state->roll + p - d;
+ // d = PIDroll->KD * (PIDroll->dif[0] - PIDroll->dif[1]) / PIDroll->DELTA_T;
+  d = PIDroll->KD * (PIDroll->dif[0] - PIDroll->dif[1]) / 0.01;
+  i = PIDroll->KI * PIDroll->int_err;
+
+  // body_state->roll = body_state->roll + p - d;//謎制御
+  body_state->roll = p + i - d; //pid制御
+  //body_state->roll = p; //p制御
+
   //ピッチ軸のPD制御
   PIDpitch->dif[0] = PIDpitch->dif[1];
-  PIDpitch->dif[1] = 0 + jy901->pich;
+  PIDpitch->dif[1] = 0.0 + jy901->pich;
+  //偏差の積分
+ // PIDpitch->int_err = PIDpitch->int_err + PIDpitch->dif[1] * PIDroll->DELTA_T;
+ PIDpitch->int_err = PIDpitch->int_err + PIDpitch->dif[1] * 0.01;
 
   p = PIDpitch->KP * PIDpitch->dif[1];
-  d = PIDpitch->KD * (PIDpitch->dif[0] - PIDpitch->dif[1]) / PIDpitch->DELTA_T;
-  body_state->pitch = body_state->pitch + p - d;
+  //d = PIDpitch->KD * (PIDpitch->dif[0] - PIDpitch->dif[1]) / PIDpitch->DELTA_T;
+  d = PIDpitch->KD * (PIDpitch->dif[0] - PIDpitch->dif[1]) / 0.01;
+  i = PIDpitch->KI * PIDpitch->int_err;
+
+  //body_state->pitch = body_state->pitch * 2 + p - d;//謎制御
+  body_state->pitch = p + i - d; //pi制御
+  printf("%f",d);
+  //body_state->pitch = p; //p制御
 
   body_state->ZMP_y = 5.0 * (y1 / 36000.0);
   body_state->ZMP_x = 5.0 * (x1 / 36000.0);
-  printf("zmp_x %f,x1 %f \n", body_state->ZMP_x, x1);
   if (controler->A == 1)
   {
     body_state->cog_height = body_state->cog_height + 0.1;
@@ -965,6 +984,8 @@ int main(int argc, char *argv[])
   ///////////////////実験データ記録ファイルのための準備//////////////////////////////////////////
   FILE *jyRecFile;
   jyRecFile = fopen("jyRec.txt", "w");
+  fprintf(jyRecFile, "Kp= %f,Kd =%f \n", PIDpitch->KP, PIDpitch->KD);
+  fprintf(jyRecFile, "stride = %f, trjHeight = %f,body_heigut %f\n", leg[front_left].trajectory_width * 2, leg[front_left].trajectory_hight, body_state->cog_height);
   fprintf(jyRecFile, "POSIXtime,terrainPitch,terrainroll,jyPitch,jyRoll,estimateTerrainPich,estimateTerrainRoll\n");
   struct timeval currentTime; //現在時刻を格納する構造体変数
 
@@ -1018,6 +1039,8 @@ int main(int argc, char *argv[])
     }
     if (body_state->mode == auto_attitude_mode)
     {
+      PIDpitch->int_err =0.0;
+      PIDroll->int_err = 0.0;
       //自動姿勢制御モードコントローラ+jy901からデータを取り代入する
       set_val_from_jy901_and_controller(leg, controler, jy901, body_state, PIDpitch, PIDroll);
     }
@@ -1028,14 +1051,14 @@ int main(int argc, char *argv[])
 
     //現在時刻の所得
     gettimeofday(&currentTime, NULL);
-    printf("/////////////hex Infoation//////////////////\n");
+    // printf("/////////////hex Infoation//////////////////\n");
     printf("pich by Jy901: %f °\n", (jy901->pich / M_PI) * 180.0);
     printf("Roll by jy901: %f °\n", (jy901->roll / M_PI) * 180.0);
-    printf("pich by terrain: %f °\n", (terrainJy->pich / M_PI) * 180.0);
-    printf("Roll by terrain: %f °\n", (terrainJy->roll / M_PI) * 180.0);
+    // printf("pich by terrain: %f °\n", (terrainJy->pich / M_PI) * 180.0);
+    // printf("Roll by terrain: %f °\n", (terrainJy->roll / M_PI) * 180.0);
 
-    printf("currentTime: %ld.%06lu \n", currentTime.tv_sec, currentTime.tv_usec);
-    fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180.0, (terrainJy->roll / M_PI) * 180.0, (jy901->pich / M_PI) * 180.0, (jy901->roll / M_PI) * 180.0, (body_state->pitch / M_PI) * 180.0, (body_state->roll / M_PI) * 180.0);
+    // printf("currentTime: %ld.%06lu \n", currentTime.tv_sec, currentTime.tv_usec);
+   fprintf(jyRecFile, "%ld.%06lu,%f,%f,%f,%f,%f,%f,\n", currentTime.tv_sec, currentTime.tv_usec, (terrainJy->pich / M_PI) * 180.0, (terrainJy->roll / M_PI) * 180.0, (jy901->pich / M_PI) * 180.0, (jy901->roll / M_PI) * 180.0, (body_state->pitch / M_PI) * 180.0, (body_state->roll / M_PI) * 180.0);
 
     ////実験データを見やすくするためのマーカー
     if (controler->RT)
