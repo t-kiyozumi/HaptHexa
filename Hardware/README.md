@@ -1,0 +1,1 @@
+HaptHexa hardware technical resources has been moved to new repository [hapthexa_hardware](https://github.com/tmcit-caolab/hapthexa_hardware).
